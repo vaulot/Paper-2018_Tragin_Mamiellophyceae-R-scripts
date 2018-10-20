@@ -1,0 +1,597 @@
+---
+title: "OSD Mamiello - Sci Rep 2018"
+author: "Daniel Vaulot"
+date: '`r format(Sys.time(), "%d %m %Y")`'
+header-includes:
+   - \usepackage{color, fancyvrb}
+output:
+  rmdformats::readthedown:
+    highlight: kate
+    number_sections : yes    
+  pdf_document: 
+    toc: yes
+    toc_depth: 2
+    number_sections : yes
+---
+# Aim
+
+* Analysis of OSD Mamiello data for Sci Report paper 2018
+
+## Notes
+
+* Distance to coast - https://stackoverflow.com/questions/27697504/ocean-latitude-longitude-point-distance-from-shore
+
+* To create italics`:https://stackoverflow.com/questions/47963908/underline-part-of-text-label-in-ggplot
+    * Create a string with the necessary codes. 
+    * Example `"my_title <- italic('Bathycoccus')~italic('prasinos')~-~16651~reads~-~72~samples"`
+    * Spaces are replaced by ~
+    * No commas
+    * Then use as normal string using parse `ggtitle("parse(text=my_title))`
+
+
+# Initialize. 
+
+This file defines all the necessary libraries and variables
+
+```{r init, eval=TRUE, message=FALSE, warning=FALSE}
+  source('OSD_Mamiello_init.R', echo=FALSE)
+```
+
+
+
+
+# Read data
+
+Read excel file
+
+```{r}
+  file_main <- "../Supplementary data/OSD_Mamiello_Tables.xlsx"
+  file_supp <- "../Supplementary data/OSD_Mamiello_Tables Supplementary.xlsx"
+  otu <- read_excel(path=file_supp, sheet="otus LGC Mamiello")
+  lookup_species_italic <- otu %>% 
+    select(species=species_ASV, species_italic = species_ASV_italic) %>% 
+    filter(!is.na(species_italic))
+  samples<- read_excel(path=file_supp, sheet="samples")
+  metadata <- read_excel(path=file_supp, sheet="metadata")
+  
+```
+
+# Create OSD station map with leaflet
+
+```{r fig.height=15, fig.width=15}
+
+  df <- dplyr::mutate(metadata, 
+                      latitude=as.numeric (Latitude), 
+                      longitude=as.numeric(Longitude), 
+                      label=as.character(OSD_station))
+
+  map <- map_leaflet(df, width=1000, height=1000)
+  map
+
+```
+
+
+# Summarize at genus level
+
+```{r}
+  genus_summary_all_ASV <- otu %>% 
+     group_by(order, genus) %>% 
+     summarise(n_ASVs = n(), n_seq=sum(total))
+ seq_all_ASV <- sum(genus_summary_all_ASV$n_seq)
+
+  genus_summary_top_ASV <- otu %>% 
+     filter (!is.na(species_ASV)) %>% 
+     group_by(order, genus) %>% 
+     summarise(n_ASVs = n(), n_seq=sum(total))
+  seq_top_ASV <- sum(genus_summary_top_ASV$n_seq)
+
+  print(glue::glue("Number of different genera : {nrow(genus_summary_all_ASV)}") )
+  knitr::kable(genus_summary_all_ASV) 
+  
+   print(glue::glue("Fraction of reads of top ASV : {seq_top_ASV/seq_all_ASV*100}%") )
+  knitr::kable(genus_summary_top_ASV)  
+
+  
+```
+
+
+
+# Summarize at species and ASV level
+
+There are two types of species assignement
+
+* species_wang is the the species assigned by the Wang classifier to all ASV
+* species_ASV is the species assigned to the major ASV using careful phylogenetic analysis
+
+## Compute different dataframes
+
+### For all samples and all OTUs
+
+In this paper we consider all samples not just surface samples
+
+```{r}
+  samples_surface <- samples %>%  filter (surface_sample>=0)
+  sample_number  <- nrow(samples_surface) 
+  station_number <- nrow(metadata)
+  glue::glue("Number of samples: {sample_number}") 
+  glue::glue("Number of stations: {station_number}") 
+
+  otu_long <- otu %>%  
+      select (ASV_code, genus, species_wang, species_ASV,species_ASV_italic, contains("OSD")) %>% 
+      gather(sample, n_seq, contains("OSD")) %>% 
+      filter(sample %in%  samples_surface$sample)
+  otu_long$n_seq <- otu_long$n_seq %>% replace_na(0)
+  
+  otu_seq <- otu_long %>%
+      group_by(ASV_code) %>%
+      summarise(n_seq_otu=sum(n_seq)) %>%
+      filter(n_seq_otu > 0)
+  
+  glue::glue("Number of OTUs for all samples: {nrow(otu_seq)}") 
+  glue::glue("Number of reads for all samples: {sum(otu_seq$n_seq_otu)}") 
+  
+  # write_tsv(species_seq, "OSD Mamiello sequences.tsv")
+  
+  sample_seq <- otu_long %>% 
+      group_by(sample) %>%  
+      summarise(n_seq_sample=sum(n_seq))
+  
+  sample_number_above100  <- nrow(filter(sample_seq, n_seq_sample >=100))
+  glue::glue("Number of samples with more than 100 Mamiellophyceae reads: {sample_number_above100}") 
+ 
+  otu_long <- otu_long %>% 
+    left_join(sample_seq)
+
+```
+
+
+### Function to define summary for specific groups of otus
+
+```{r}
+summarise_species <- function(otu_long) {
+  
+  sample_number <- nrow(distinct(as.tibble(otu_long$sample)))
+  print(glue::glue("Number of samples taken into account : {sample_number}") )
+  
+  species_seq <- otu_long %>%
+      group_by(genus, species) %>%
+      summarise(n_seq_species=sum(n_seq))
+
+    
+  species_samples <- otu_long %>%
+      group_by(species, sample, n_seq_sample) %>%
+      summarise(n_seq= sum(n_seq)) %>% 
+      mutate(pct_seq= n_seq/n_seq_sample*100) 
+  
+  species_samples_metadata <- species_samples %>% 
+    left_join(select(samples, sample, OSD_station, sample_label)) %>% 
+    left_join(metadata) %>% 
+    mutate(Latitude = as.numeric(Latitude), Longitude = as.numeric(Longitude))  
+
+# Summaries at species level for all species
+  
+  species_pct <- species_samples %>%
+      group_by(species) %>%
+      summarise(mean_pct_seq_species=mean(pct_seq), max_pct_seq_species=max(pct_seq))
+  
+  species_presence <- species_samples %>% 
+      filter(n_seq > 0) %>% 
+      group_by(species) %>%
+      summarise(n_samples_present= n(), pct_samples_present=100* n()/sample_number)
+
+  species_more_1pct <- species_samples %>%
+      filter(pct_seq > 1) %>% 
+      group_by(species) %>%
+      summarise(n_samples_more_1pct= n(), pct_samples_more_1pct=100* n()/sample_number)
+  
+  species_summary <- species_seq %>% 
+    left_join(species_pct) %>% 
+    left_join(species_presence) %>% 
+    left_join(species_more_1pct) %>% 
+    filter(!is.na(n_samples_present))    # This to remove the species not present among the selected OTUs
+  
+  species_stats <- list(summary=species_summary, metadata=species_samples_metadata)
+}  
+
+```
+
+###  For all OTUs at all samples
+
+```{r}
+  otu_long1 <- otu_long %>% 
+    rename (species = species_wang) %>% 
+    select(- species_ASV)
+  species_stats_1 <- summarise_species(otu_long1)
+  species_summary_1 <- species_stats_1[["summary"]]
+    
+```
+
+### For selected ASVs at samples with at least 100 reads 
+
+```{r}
+  otu_long2 <- otu_long %>% 
+    filter(n_seq_sample >=100 & !is.na(species_ASV)) %>% 
+    rename (species = species_ASV) %>% 
+    select(- species_wang)
+  species_stats_2 <- summarise_species(otu_long2)
+  species_summary_2 <- species_stats_2[["summary"]]
+  
+```
+
+
+
+## Graphics at species levels
+
+### Define function for Histograms and treemaps
+
+```{r}
+plot_species_summary <- function(species_summary,file_suffix="1"){
+  
+theme_chlorophyta_map <- theme (legend.position = c(0.1,0.20), 
+                                legend.background = element_rect(fill = "transparent"), 
+                                legend.text=element_text(size=9), 
+                                legend.title =element_text(size=9), 
+                                plot.tag.position="topright",
+                                plot.tag= element_text(size=24, face="bold"),
+                                plot.title =element_text(size=16) )
+# Number of sequences per species
+  g <- ggplot(species_summary , aes(x=reorder(species, n_seq_species), y=n_seq_species)) + 
+    geom_col() + coord_flip() + xlab("Species") + ylab("Total of sequences - all samples")
+  print(g)
+  
+  g_treemap <- ggplot(species_summary, aes(area = n_seq_species, fill = genus, label = species, subgroup = genus)) +
+    ggtitle("OSD - number of sequences") +
+    scale_fill_discrete(name = "Genus") +
+    geom_treemap() +
+    geom_treemap_subgroup_border() +
+    geom_treemap_text(colour = "white", place = "topleft", reflow = T, padding.x =  grid::unit(3, "mm"), padding.y = grid::unit(3, "mm") )
+  print(g_treemap)
+  
+  ggsave(plot= g_treemap, filename=str_c("pdf/Treemap_sequences_", file_suffix ,".pdf"),
+           width = 10 , height = 7, scale=2.0, units="cm", useDingbats=FALSE)
+  
+  ggsave(plot= g_treemap, filename=str_c("png/Treemap_sequences_", file_suffix ,".png"),
+           dpi="print", scale=2.0) 
+  
+  treemap_dv(species_summary ,c("genus", "species"),"n_seq_species","OSD - number of sequences")
+  
+
+# Mean pct of sequences per species
+  
+  g <- ggplot(species_summary, aes(area = mean_pct_seq_species, fill = genus, label = species, subgroup = genus)) +
+    ggtitle("OSD - mean of contribution", subtitle = "") +
+    geom_treemap() +
+    geom_treemap_subgroup_border() +
+    geom_treemap_text(colour = "white", place = "topleft", reflow = T)
+  print(g)
+    
+  treemap_dv(species_summary , c("genus", "species"),"mean_pct_seq_species","OSD - mean of contribution")
+  
+# Graph
+  
+  graph_samples_present <- ggplot(species_summary , aes(x=reorder(species, pct_samples_present), y=pct_samples_present)) + 
+    geom_col()+ geom_text(aes(label=n_samples_present), hjust=-0.25) + 
+    coord_flip() + xlab("Species") + ylab ("% of samples where species detected")  + ylim(0,100) +
+    theme_dviz_grid() + theme_chlorophyta_map +
+    labs(title = "", tag = "A")
+    
+    
+  print(graph_samples_present)
+  
+   graph_samples_more_1pct <- ggplot(species_summary , aes(x=reorder(species, pct_samples_present), y=pct_samples_more_1pct)) + 
+    geom_col() + geom_text(aes(label=n_samples_more_1pct), hjust=-0.25) +
+    coord_flip() + xlab("Species") + ylab ("% of samples where species represesents \n more than 1% of Mamiellophyceae")  + ylim(0,100) +
+    theme_dviz_grid() + theme_chlorophyta_map +
+    labs(title = "", tag = "B")
+   
+  print(graph_samples_more_1pct)
+
+  grid_graphs <- gridExtra::grid.arrange(grobs=list(graph_samples_present, graph_samples_more_1pct),
+                                               ncol=1, nrow=2, clip=FALSE, padding = unit(0, "line")) 
+
+  ggsave(plot= grid_graphs, filename=str_c("pdf/Presence_", file_suffix ,".pdf"),
+         width = 15 , height = 20, scale=1.8, units="cm", useDingbats=FALSE)
+  
+  ggsave(plot= grid_graphs, filename=str_c("png/Presence_", file_suffix ,".png"),
+           dpi="print", scale=1.8) 
+  
+# Relation between samples present and samples more than 1 pct
+  g <- ggplot(species_summary, aes(x=pct_samples_more_1pct, y=pct_samples_present, label=species)) + geom_point()  + 
+    geom_text(size= 2, check_overlap = TRUE, vjust=1) + xlim(0,100)
+  print(g)
+
+# Relation between sequence per species and samples present 
+  g <- ggplot(species_summary, aes(x=mean_pct_seq_species, y=pct_samples_present, label=species)) + geom_point()  + 
+    geom_text(size= 2, check_overlap = TRUE, vjust=1)
+  print(g)
+} 
+
+```
+
+###  For all OTUs at all samples 
+
+```{r}
+    plot_species_summary(species_stats_1[["summary"]], file_suffix = "all_ASV")
+```
+
+### For selected OTUs (major ASV) at samples with more than 100 reads 
+
+```{r}
+    plot_species_summary(species_stats_2[["summary"]], file_suffix = "selected_ASV")
+```
+
+
+# Metadata
+
+## Statistics
+
+```{r, eval=FALSE}
+ metadata_summarized <- metadata %>% 
+  transmute(Temperature=as.numeric(Temperature), 
+            Salinity=as.numeric(Salinity), 
+            Nitrates=as.numeric(Nitrates), 
+            Phosphates=as.numeric(Phosphates), 
+            Chlorophylle_a=as.numeric(Chlorophylle_a)) %>% 
+  summarise_all(funs(min, max, mean, median, sd), na.rm=TRUE)
+  knitr::kable(metadata_summarized)
+  
+```
+
+
+
+# World Maps for each species
+
+
+```{r fig.height=10, fig.width=10, message=FALSE, warning=FALSE}
+
+# Define constants for the map   
+  size_factor = 1  
+  size_points <- 2.5
+  size_cross <- 1
+  color_ice <- "lightslateblue"
+  color_water  <- "red"
+  color_cultures <- "green"
+  color_not_present <- "blue"
+  color_morpho <- "brown"
+  
+  species_samples_metadata<- species_stats_2[["metadata"]]
+  species_summary<- species_stats_2[["summary"]]
+
+  
+for (one_genus in c ("Bathycoccus", "Ostreococcus", "Micromonas", "Mantoniella")) {
+  
+  species_selected <- species_summary$species[species_summary$genus== one_genus]
+  map_array_main_fig <- list()  # to store the maps to do tiled graph
+  map_array_main_fig_eu <- list()  # to store the EU maps to do tiled graph
+
+  for (one_species in species_selected) {
+   
+   one_species_summary <- species_summary %>% filter(species == one_species)
+   one_species_italic <- lookup_species_italic$species_italic[lookup_species_italic$species==one_species]
+    
+    if (one_species_summary$max_pct_seq_species > 20)  {species_limits = c(0,80)
+                                                        species_breaks=c(10, 20, 40, 80) }
+                                                  else {species_limits = c(0,20)
+                                                        species_breaks=c(2, 5, 10, 20)}
+    
+    species.absent <- species_samples_metadata %>% 
+      filter(n_seq_sample >= 100 & pct_seq < 1 & species == one_species)
+    
+    species.present <- species_samples_metadata %>% 
+      filter(n_seq_sample >= 100 & pct_seq >= 1 & species == one_species)
+    
+    one_species_map <- map_world(color_borders = "grey85") + 
+      theme_light(base_size = 14) +
+      geom_point(data=species.absent, 
+                 aes(x=Longitude, y=Latitude), 
+                 color=color_not_present, 
+                 size=size_cross, shape=3) +
+      geom_point(data=species.present, 
+                 aes(x=Longitude, y=Latitude, size=pct_seq, color=pct_seq, alpha=pct_seq) ) +
+      theme (legend.position = c(0.15,0.25), 
+             legend.background = element_rect(fill = "transparent"), 
+             legend.text=element_text(size=12), 
+             legend.title =element_text(size=12) ) +
+      scale_size(name = "% of Mamiellophyceae", range = c(0, 8),limits = species_limits, breaks=species_breaks)+
+      scale_alpha_continuous(name="% of Mamiellophyceae", range=c(0.5, .9), limits = species_limits, breaks=species_breaks) +
+      viridis::scale_color_viridis(option="magma", name="% of Mamiellophyceae", limits = species_limits, breaks=species_breaks ) + 
+      guides( colour = guide_legend()) +
+      theme(plot.title = element_text(margin = margin(t = 10, b = 5), size=20),
+            panel.grid.minor = element_blank()) +
+      ggtitle (parse(text = str_c(one_species_italic,"~-~", 
+               one_species_summary$n_seq_species, "~reads~-~",  
+               one_species_summary$n_samples_more_1pct, "~samples" ) ))
+    
+      # range gives maximum and minimum size of symbols, limits the extent of the scale
+      # replace guide = "legend" by guide=FALSE to remove the legend....
+      # NOT USED : guides(color = guide_legend(override.aes = list(size=5))) +
+    
+    one_species_map_eu <- one_species_map +
+    coord_fixed(1.3, xlim = c(-40, 40),ylim = c(30, 70)) +
+    scale_x_continuous(breaks = (-4:4) * 10) +
+    scale_y_continuous(breaks = (3:7) * 10) 
+  
+    print(one_species_map)
+    print(one_species_map_eu)
+    
+    map_array_main_fig[[one_species]]<- one_species_map 
+    map_array_main_fig_eu[[one_species]]<- one_species_map_eu
+    }
+  
+    grid_map_main_fig <- gridExtra::grid.arrange(grobs=map_array_main_fig, ncol=2, nrow=5, clip=FALSE, padding = unit(0, "line")) 
+    grid_map_main_fig_eu <- gridExtra::grid.arrange(grobs=map_array_main_fig_eu, ncol=2, nrow=5, clip=FALSE, padding = unit(0, "line")) 
+
+  # Save pdf 
+    ggsave(plot= grid_map_main_fig, filename=str_c("pdf/Map_",one_genus,".pdf"),
+           width = 20 , height = 35, scale=2.0, units="cm", useDingbats=FALSE)
+    ggsave(plot= grid_map_main_fig_eu, filename=str_c("pdf/Map_",one_genus,"_EU.pdf"),
+           width = 20 , height = 35, scale=2.0, units="cm", useDingbats=FALSE) 
+    
+  # Save png 
+    ggsave(plot= grid_map_main_fig, filename=str_c("png/Map_",one_genus,".png"),
+           dpi="print", scale=1.8) 
+    
+    ggsave(plot= grid_map_main_fig_eu, filename=str_c("png/Map_",one_genus,"_EU.png"),
+           dpi="print", scale=1.8) 
+  
+}
+  
+```
+
+
+
+# Heatmaps 
+
+
+## Make the matrix
+```{r, eval=TRUE}
+
+# species_heatmap_data <- species_samples_metadata %>%
+#   ungroup() %>%  
+#   mutate(sample_code = str_c(Ocean_code,"_",sample_code)) %>% 
+#   select(sample_label, species, pct_seq) %>% 
+#   spread(species, pct_seq) %>% 
+#   tibble::column_to_rownames(var="sample_label") %>% 
+#   t()
+
+species_heatmap_data_vertical <- species_samples_metadata %>%
+  ungroup() %>%  
+  mutate(sample_label = str_c(Ocean_code,"_",sample_label)) %>% 
+  select(sample_label, species, pct_seq) %>% 
+  spread(species, pct_seq) %>% 
+  tibble::column_to_rownames(var="sample_label") 
+
+species_heatmap_data <- t(species_heatmap_data_vertical)
+ 
+```
+
+## Use ComplexHeatmap
+
+See [Web site](https://github.com/jokergoo/ComplexHeatmap)
+
+```{r, eval=TRUE }
+  
+  library(ComplexHeatmap)
+
+  #Palette de couleurs
+
+  reds=colorRampPalette(c("grey95","orange" ,"red3"))
+  couleurs=reds(10)  
+  
+  pdf(file="pdf/Heatmap horizontal no clustering.pdf", width =15, height = 6)
+  # png(file="png/Heatmap_horizontal.png", width =1500, height = 600)
+  Heatmap(as.matrix(species_heatmap_data), col=couleurs, 
+                          clustering_distance_columns = function(m) vegan::vegdist(m),
+                          cluster_rows = FALSE, cluster_columns = TRUE,  
+                          show_column_dend = TRUE, show_row_dend = FALSE,
+                          column_dend_height = unit(30, "mm"),
+                          column_title = "Sample", row_title = "", 
+                          column_title_side = "top", row_title_side = "left", 
+                          row_title_gp = gpar(fontsize = 12, fontface = "plain"),
+                          column_title_gp = gpar(fontsize = 12, fontface = "plain"),
+                          column_names_gp = gpar(fontsize = 8, fontface="plain"),
+                          column_names_side = "top",column_dend_side ="bottom",
+                          name = "%", heatmap_legend_param = list(title_gp=gpar(fontface="plain")))
+  while (!is.null(dev.list()))  dev.off()
+  
+
+#  pdf(file="pdf/Heatmap vertical.pdf", width =6, height = 12)  
+  png(file="png/Heatmap vertical.png", width =600, height = 1200)   
+  Heatmap(as.matrix(species_heatmap_data_vertical), col=couleurs, 
+                          split = 7, combined_name_fun = NULL, km_title = "",
+                          clustering_distance_rows = function(m) vegan::vegdist(m),
+                          clustering_distance_columns = function(m) vegan::vegdist(m),
+                          cluster_rows = TRUE, cluster_columns = TRUE,
+                          show_column_dend = FALSE, show_row_dend = TRUE,
+                          row_dend_width = unit(30, "mm"),
+                          column_title = "", row_title = "Sample",
+                          column_title_side = "bottom", row_title_side = "right", 
+                          row_title_gp = gpar(fontsize = 0, fontface = "plain"),
+                          column_title_gp = gpar(fontsize = 15, fontface = "plain"),
+                          row_names_gp = gpar(fontsize = 8, fontface="plain"),
+                          name = "%", heatmap_legend_param = list(title_gp=gpar(fontface="plain")))
+  while (!is.null(dev.list()))  dev.off()
+
+```
+
+# Generate tables for the paper from the xtable package
+
+Note : italics are done by encosing between {}
+
+```{r, eval=FALSE}
+sanitize.italics <- function(str) {
+  str_replace_all(str, c("_" = "\\\\_", 
+                         "\\{" = "\\\\textit{", 
+                         "°" = "\\\\degree",
+                         "X" = "\\\\cellcolor{gray}"))
+}
+```
+
+# Table of ASVs (Table 1)
+```{r, eval=FALSE}
+table_ASV <- read_excel(path=file_main, sheet="Table 1")
+table_ASV <- xtable::xtable(table_ASV, label="table:ASV", caption='Major Mamiellophyceae ASVs from the LGC and LW datasets: assignation, total abundance and representative sequences name.', digits=0)
+print(table_ASV,  scalebox = 0.75, 
+      caption.placement = "top",
+      include.rownames = FALSE, 
+      file="../version_5.3/tables/table_ASV.tex",
+      sanitize.text.function = sanitize.italics)
+```
+
+# Table summary (Table 2)
+
+```{r, eval=FALSE}
+table_ASV <- read_excel(path=file_main, sheet="Table 2")
+table_ASV <- xtable::xtable(table_ASV, label="table:summary", caption='Summary of the coastal distribution of Mamiellophyceae species and clades.  The column indicate the number of samples where the species/clade represented more than 1\\% of Mamiellophyceae', align = "llllccccccp{4cm}", digits=0)
+
+print(table_ASV,  scalebox = 0.75, 
+      caption.placement = "top",
+      include.rownames = FALSE, 
+      file="../version_5.3/tables/table_summary.tex",
+      sanitize.text.function = sanitize.italics)
+```
+
+# Table of OSD stations
+```{r, eval=FALSE}
+table_metadata <- metadata %>% 
+  select(OSD_station_code, Station_name, Ocean, Country) %>% 
+  rename(Station=OSD_station_code, Name=Station_name)
+table_metadata <- xtable::xtable(table_metadata, label="table:OSD_stations", caption='List of OSD stations.')
+print(table_metadata,   
+      tabular.environment = "longtable", floating=FALSE,
+      caption.placement = "top",
+      include.rownames = FALSE, 
+      file="../version_5.3/tables/table_OSD.tex")
+```
+
+# Table of similarities
+
+```{r, eval=FALSE}
+# Do not use format="latex", done by default
+
+table_simil <- read_excel(path=file_supp, sheet="simil_Ostreococcus")
+table_simil <- xtable::xtable(table_simil, label="table:simil_ostreo", caption='Matrix of the pairwise percent identity between \\textit{Ostreococcus} clades. The calculation was done based on the alignment available as Supplementary data.')
+print(table_simil,  scalebox = 0.9, 
+      caption.placement = "top",
+      include.rownames = FALSE, 
+      file="../version_5.3/tables/table_simil_ostreo.tex")
+
+table_simil <- read_excel(path=file_supp, sheet="simil_Micromonas")
+table_simil <- xtable::xtable(table_simil, 
+                              label="table:simil_micromonas", 
+                              caption='Matrix of the pairwise percent identity between \\textit{Micromonas} clades. The calculation was done based on the alignment available as Supplementary data.')
+print(table_simil,  
+      scalebox = 0.65,
+      caption.placement = "top",
+      include.rownames = FALSE,  
+      file="../version_5.3/tables/table_simil_micromonas.tex")
+
+table_simil <- read_excel(path=file_supp, sheet="simil_Mantoniella")
+table_simil <- xtable::xtable(table_simil, label="table:simil_mantoniella", caption='Matrix of the pairwise percent identity between \\textit{Mantoniella} clades. The calculation was done based on the alignment available as Supplementary data.')
+print(table_simil,  
+      scalebox = 0.9, 
+      caption.placement = "top",
+      include.rownames = FALSE,  
+      file="../version_5.3/tables/table_simil_mantoniella.tex")
+
+```
