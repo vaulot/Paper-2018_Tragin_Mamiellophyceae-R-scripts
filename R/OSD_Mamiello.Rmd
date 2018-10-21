@@ -570,7 +570,7 @@ print(table_metadata,
 # Do not use format="latex", done by default
 
 table_simil <- read_excel(path=file_supp, sheet="simil_Ostreococcus")
-table_simil <- xtable::xtable(table_simil, label="table:simil_ostreo", caption='Matrix of the pairwise percent identity between \\textit{Ostreococcus} clades. The calculation was done based on the alignment available as Supplementary data.')
+table_simil <- xtable::xtable(table_simil, label="table:simil_ostreo", caption='Matrix of the pairwise percent identity between \\textit{Ostreococcus} clades. The calculation was done based on the alignment available as Supplementary data S6.')
 print(table_simil,  scalebox = 0.9, 
       caption.placement = "top",
       include.rownames = FALSE, 
@@ -579,7 +579,7 @@ print(table_simil,  scalebox = 0.9,
 table_simil <- read_excel(path=file_supp, sheet="simil_Micromonas")
 table_simil <- xtable::xtable(table_simil, 
                               label="table:simil_micromonas", 
-                              caption='Matrix of the pairwise percent identity between \\textit{Micromonas} clades. The calculation was done based on the alignment available as Supplementary data.')
+                              caption='Matrix of the pairwise percent identity between \\textit{Micromonas} clades. The calculation was done based on the alignment available as Supplementary data S7.')
 print(table_simil,  
       scalebox = 0.65,
       caption.placement = "top",
@@ -587,7 +587,7 @@ print(table_simil,
       file="../version_5.3/tables/table_simil_micromonas.tex")
 
 table_simil <- read_excel(path=file_supp, sheet="simil_Mantoniella")
-table_simil <- xtable::xtable(table_simil, label="table:simil_mantoniella", caption='Matrix of the pairwise percent identity between \\textit{Mantoniella} clades. The calculation was done based on the alignment available as Supplementary data.')
+table_simil <- xtable::xtable(table_simil, label="table:simil_mantoniella", caption='Matrix of the pairwise percent identity between \\textit{Mantoniella} clades. The calculation was done based on the alignment available as Supplementary data S8.')
 print(table_simil,  
       scalebox = 0.9, 
       caption.placement = "top",
