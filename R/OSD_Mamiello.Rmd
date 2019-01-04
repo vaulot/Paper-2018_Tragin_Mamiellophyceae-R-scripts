@@ -280,7 +280,7 @@ theme_chlorophyta_map <- theme (legend.position = c(0.1,0.20),
   
    graph_samples_more_1pct <- ggplot(species_summary , aes(x=reorder(species, pct_samples_present), y=pct_samples_more_1pct)) + 
     geom_col() + geom_text(aes(label=n_samples_more_1pct), hjust=-0.25) +
-    coord_flip() + xlab("Species") + ylab ("% of samples where species represesents \n more than 1% of Mamiellophyceae")  + ylim(0,100) +
+    coord_flip() + xlab("Species") + ylab ("% of samples where species represents \n more than 1% of Mamiellophyceae")  + ylim(0,100) +
     theme_dviz_grid() + theme_chlorophyta_map +
     labs(title = "", tag = "B")
    
@@ -525,16 +525,19 @@ sanitize.italics <- function(str) {
                          "°" = "\\\\degree",
                          "X" = "\\\\cellcolor{gray}"))
 }
+
+
+path_table <- function(file_table) {str_c("../version_latex_3/tables/", file_table)
 ```
 
 # Table of ASVs (Table 1)
 ```{r, eval=FALSE}
 table_ASV <- read_excel(path=file_main, sheet="Table 1")
-table_ASV <- xtable::xtable(table_ASV, label="table:ASV", caption='Major Mamiellophyceae ASVs from the LGC and LW datasets: assignation, total abundance and representative sequences name.', digits=0)
+table_ASV <- xtable::xtable(table_ASV, label="table:ASV", caption='Major Mamiellophyceae amplicon single variants (ASVs) from the LGC and LW datasets: taxonomic assignation, total abundance and representative sequences name.', digits=0)
 print(table_ASV,  scalebox = 0.75, 
       caption.placement = "top",
       include.rownames = FALSE, 
-      file="../version_5.3/tables/table_ASV.tex",
+      file=path_table("table_ASV.tex"),
       sanitize.text.function = sanitize.italics)
 ```
 
@@ -542,12 +545,12 @@ print(table_ASV,  scalebox = 0.75,
 
 ```{r, eval=FALSE}
 table_ASV <- read_excel(path=file_main, sheet="Table 2")
-table_ASV <- xtable::xtable(table_ASV, label="table:summary", caption='Summary of the coastal distribution of Mamiellophyceae species and clades.  The column indicate the number of samples where the species/clade represented more than 1\\% of Mamiellophyceae', align = "llllccccccp{4cm}", digits=0)
+table_ASV <- xtable::xtable(table_ASV, label="table:summary", caption='Summary of the coastal distribution of Mamiellophyceae species and clades.  The column indicate the number of samples where the species/clade represented more than 1\\% of Mamiellophyceae reads.', align = "llllccccccp{4cm}", digits=0)
 
 print(table_ASV,  scalebox = 0.75, 
       caption.placement = "top",
       include.rownames = FALSE, 
-      file="../version_5.3/tables/table_summary.tex",
+      file=path_table("table_summary.tex"),
       sanitize.text.function = sanitize.italics)
 ```
 
@@ -561,7 +564,7 @@ print(table_metadata,
       tabular.environment = "longtable", floating=FALSE,
       caption.placement = "top",
       include.rownames = FALSE, 
-      file="../version_5.3/tables/table_OSD.tex")
+      file=path_table("table_OSD.tex"))
 ```
 
 # Table of similarities
@@ -574,7 +577,7 @@ table_simil <- xtable::xtable(table_simil, label="table:simil_ostreo", caption='
 print(table_simil,  scalebox = 0.9, 
       caption.placement = "top",
       include.rownames = FALSE, 
-      file="../version_5.3/tables/table_simil_ostreo.tex")
+      file=path_table("table_simil_ostreo.tex"))
 
 table_simil <- read_excel(path=file_supp, sheet="simil_Micromonas")
 table_simil <- xtable::xtable(table_simil, 
@@ -584,7 +587,7 @@ print(table_simil,
       scalebox = 0.65,
       caption.placement = "top",
       include.rownames = FALSE,  
-      file="../version_5.3/tables/table_simil_micromonas.tex")
+      file=path_table("table_simil_micromonas.tex"))
 
 table_simil <- read_excel(path=file_supp, sheet="simil_Mantoniella")
 table_simil <- xtable::xtable(table_simil, label="table:simil_mantoniella", caption='Matrix of the pairwise percent identity between \\textit{Mantoniella} clades. The calculation was done based on the alignment available as Supplementary data S8.')
@@ -592,6 +595,6 @@ print(table_simil,
       scalebox = 0.9, 
       caption.placement = "top",
       include.rownames = FALSE,  
-      file="../version_5.3/tables/table_simil_mantoniella.tex")
+      file=path_table("table_simil_mantoniella.tex"))
 
 ```
