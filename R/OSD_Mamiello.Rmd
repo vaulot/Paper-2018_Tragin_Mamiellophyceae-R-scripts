@@ -1,5 +1,5 @@
 ---
-title: "OSD Mamiello - Sci Rep 2018"
+title: "OSD Mamiellophyceae - Sci Rep 2019"
 author: "Daniel Vaulot"
 date: '`r format(Sys.time(), "%d %m %Y")`'
 header-includes:
@@ -15,18 +15,19 @@ output:
 ---
 # Aim
 
-* Analysis of OSD Mamiello data for Sci Report paper 2018
+* Analysis of OSD Mamiellophyceae data for Sci Report paper 2019
+
 
 ## Notes
 
-* Distance to coast - https://stackoverflow.com/questions/27697504/ocean-latitude-longitude-point-distance-from-shore
+* Distance to coast: https://stackoverflow.com/questions/27697504/ocean-latitude-longitude-point-distance-from-shore
 
-* To create italics`:https://stackoverflow.com/questions/47963908/underline-part-of-text-label-in-ggplot
+* To create italics: https://stackoverflow.com/questions/47963908/underline-part-of-text-label-in-ggplot
     * Create a string with the necessary codes. 
     * Example `"my_title <- italic('Bathycoccus')~italic('prasinos')~-~16651~reads~-~72~samples"`
     * Spaces are replaced by ~
     * No commas
-    * Then use as normal string using parse `ggtitle("parse(text=my_title))`
+    * Then use as normal string using parse `ggtitle(parse(text=my_title))`
 
 
 # Initialize. 
@@ -42,12 +43,12 @@ This file defines all the necessary libraries and variables
 
 # Read data
 
-Read excel file
+### Read excel files
 
 ```{r}
   file_main <- "../Supplementary data/OSD_Mamiello_Tables.xlsx"
   file_supp <- "../Supplementary data/OSD_Mamiello_Tables Supplementary.xlsx"
-  otu <- read_excel(path=file_supp, sheet="otus LGC Mamiello")
+  otu <- read_excel(path=file_supp, sheet="ASVs LGC Mamiello")
   lookup_species_italic <- otu %>% 
     select(species=species_ASV, species_italic = species_ASV_italic) %>% 
     filter(!is.na(species_italic))
@@ -55,6 +56,43 @@ Read excel file
   metadata <- read_excel(path=file_supp, sheet="metadata")
   
 ```
+
+### Compute number of reads in workable files
+
+Use the fasta files
+
+```{r, eval=FALSE}
+
+fasta_dir <- "C:/daniel.vaulot@gmail.com/Metabarcoding/OSD/2014 seq 18S_workable/fasta"
+
+# get a list of all fastq files in the ngs directory and separate R1 and R2
+  fns <- sort(list.files(fasta_dir, full.names = TRUE)) 
+  fns <- fns[str_detect( basename(fns),".fasta")]
+
+# Extract sample names, assuming filenames have format: SAMPLENAME_XXX.fastq
+  sample.names <- str_split(basename(fns), pattern = "_18S", simplify = TRUE) 
+  sample.names <- sample.names[,1]
+  
+  df <- data.frame()
+  
+ for(i in 1:length(fns)) { 
+    
+    # use the dada2 function fastq.geometry
+      sequences_length <- Biostrings::fasta.seqlengths(fns[i])
+      
+    # extract the information on number of sequences and file name 
+      df_one_row <- data.frame (n_seq=length(sequences_length), file_name=basename(fns[i]), sample_name=sample.names[i])
+      
+    # add one line to data frame
+      df <- bind_rows(df, df_one_row)
+ } 
+  
+  OSD_sequence_info <- df 
+  write_tsv (OSD_sequence_info, "OSD_sequence_info.tsv", na="")
+
+
+```
+
 
 # Create OSD station map with leaflet
 
@@ -86,11 +124,12 @@ Read excel file
   seq_top_ASV <- sum(genus_summary_top_ASV$n_seq)
 
   print(glue::glue("Number of different genera : {nrow(genus_summary_all_ASV)}") )
-  knitr::kable(genus_summary_all_ASV) 
+  # knitr::kable(genus_summary_all_ASV) 
+  genus_summary_all_ASV
   
-   print(glue::glue("Fraction of reads of top ASV : {seq_top_ASV/seq_all_ASV*100}%") )
-  knitr::kable(genus_summary_top_ASV)  
-
+  print(glue::glue("Fraction of reads of top ASV : {seq_top_ASV/seq_all_ASV*100}%") )
+  # knitr::kable(genus_summary_top_ASV)  
+  genus_summary_top_ASV
   
 ```
 
@@ -108,6 +147,7 @@ There are two types of species assignement
 ### For all samples and all OTUs
 
 In this paper we consider all samples not just surface samples
+
 
 ```{r}
   samples_surface <- samples %>%  filter (surface_sample>=0)
@@ -127,7 +167,7 @@ In this paper we consider all samples not just surface samples
       summarise(n_seq_otu=sum(n_seq)) %>%
       filter(n_seq_otu > 0)
   
-  glue::glue("Number of OTUs for all samples: {nrow(otu_seq)}") 
+  glue::glue("Number of ASVs for all samples: {nrow(otu_seq)}") 
   glue::glue("Number of reads for all samples: {sum(otu_seq$n_seq_otu)}") 
   
   # write_tsv(species_seq, "OSD Mamiello sequences.tsv")
@@ -136,9 +176,12 @@ In this paper we consider all samples not just surface samples
       group_by(sample) %>%  
       summarise(n_seq_sample=sum(n_seq))
   
+  samples_with_seq <- left_join(samples, sample_seq)
+  # write_tsv(samples_updated, "OSD Mamiello sequences.tsv", na="")
+  
   sample_number_above100  <- nrow(filter(sample_seq, n_seq_sample >=100))
   glue::glue("Number of samples with more than 100 Mamiellophyceae reads: {sample_number_above100}") 
- 
+  
   otu_long <- otu_long %>% 
     left_join(sample_seq)
 
@@ -197,6 +240,8 @@ summarise_species <- function(otu_long) {
 
 ###  For all OTUs at all samples
 
+
+
 ```{r}
   otu_long1 <- otu_long %>% 
     rename (species = species_wang) %>% 
@@ -215,7 +260,7 @@ summarise_species <- function(otu_long) {
     select(- species_wang)
   species_stats_2 <- summarise_species(otu_long2)
   species_summary_2 <- species_stats_2[["summary"]]
-  
+
 ```
 
 
@@ -244,7 +289,12 @@ theme_chlorophyta_map <- theme (legend.position = c(0.1,0.20),
     scale_fill_discrete(name = "Genus") +
     geom_treemap() +
     geom_treemap_subgroup_border() +
-    geom_treemap_text(colour = "white", place = "topleft", reflow = T, padding.x =  grid::unit(3, "mm"), padding.y = grid::unit(3, "mm") )
+    geom_treemap_text(place = "topleft", 
+                      reflow = F, 
+                      padding.x =  grid::unit(3, "mm"), 
+                      padding.y = grid::unit(3, "mm"),
+                      min.size = 7)+
+    scale_fill_viridis_d()
   print(g_treemap)
   
   ggsave(plot= g_treemap, filename=str_c("pdf/Treemap_sequences_", file_suffix ,".pdf"),
@@ -262,7 +312,8 @@ theme_chlorophyta_map <- theme (legend.position = c(0.1,0.20),
     ggtitle("OSD - mean of contribution", subtitle = "") +
     geom_treemap() +
     geom_treemap_subgroup_border() +
-    geom_treemap_text(colour = "white", place = "topleft", reflow = T)
+    geom_treemap_text(colour = "white", place = "topleft", reflow = T) +
+    scale_fill_viridis_d()
   print(g)
     
   treemap_dv(species_summary , c("genus", "species"),"mean_pct_seq_species","OSD - mean of contribution")
@@ -356,7 +407,8 @@ theme_chlorophyta_map <- theme (legend.position = c(0.1,0.20),
   
   species_samples_metadata<- species_stats_2[["metadata"]]
   species_summary<- species_stats_2[["summary"]]
-
+  readr::write_tsv(species_samples_metadata, "Mamiello species station.tsv")
+  readr::write_tsv(species_summary, "Mamiello species summary.tsv")
   
 for (one_genus in c ("Bathycoccus", "Ostreococcus", "Micromonas", "Mantoniella")) {
   
@@ -396,7 +448,7 @@ for (one_genus in c ("Bathycoccus", "Ostreococcus", "Micromonas", "Mantoniella")
       scale_alpha_continuous(name="% of Mamiellophyceae", range=c(0.5, .9), limits = species_limits, breaks=species_breaks) +
       viridis::scale_color_viridis(option="magma", name="% of Mamiellophyceae", limits = species_limits, breaks=species_breaks ) + 
       guides( colour = guide_legend()) +
-      theme(plot.title = element_text(margin = margin(t = 10, b = 5), size=20),
+      theme(plot.title = element_text(margin = margin(t = 10, b = 5), size=18),
             panel.grid.minor = element_blank()) +
       ggtitle (parse(text = str_c(one_species_italic,"~-~", 
                one_species_summary$n_seq_species, "~reads~-~",  
@@ -496,7 +548,7 @@ See [Web site](https://github.com/jokergoo/ComplexHeatmap)
   
 
 #  pdf(file="pdf/Heatmap vertical.pdf", width =6, height = 12)  
-  png(file="png/Heatmap vertical.png", width =600, height = 1200)   
+#  png(file="png/Heatmap vertical.png", width =600, height = 1200)   
   Heatmap(as.matrix(species_heatmap_data_vertical), col=couleurs, 
                           split = 7, combined_name_fun = NULL, km_title = "",
                           clustering_distance_rows = function(m) vegan::vegdist(m),
@@ -527,7 +579,7 @@ sanitize.italics <- function(str) {
 }
 
 
-path_table <- function(file_table) {str_c("../version_latex_3/tables/", file_table)
+path_table <- function(file_table) {str_c("../version_latex_3/tables/", file_table)}
 ```
 
 # Table of ASVs (Table 1)
@@ -545,7 +597,7 @@ print(table_ASV,  scalebox = 0.75,
 
 ```{r, eval=FALSE}
 table_ASV <- read_excel(path=file_main, sheet="Table 2")
-table_ASV <- xtable::xtable(table_ASV, label="table:summary", caption='Summary of the coastal distribution of Mamiellophyceae species and clades.  The column indicate the number of samples where the species/clade represented more than 1\\% of Mamiellophyceae reads.', align = "llllccccccp{4cm}", digits=0)
+table_ASV <- xtable::xtable(table_ASV, label="table:summary", caption='Summary of the coastal distribution of Mamiellophyceae species and clades.  The column indicate the number of samples where the species/clade represented more than 1\\% of Mamiellophyceae reads in the LGC dataset.  For \\textit{Mantoniella} clade A was only oberved in the LW dataset.', align = "lllcccccccc", digits=0)
 
 print(table_ASV,  scalebox = 0.75, 
       caption.placement = "top",
@@ -554,14 +606,39 @@ print(table_ASV,  scalebox = 0.75,
       sanitize.text.function = sanitize.italics)
 ```
 
-# Table of OSD stations
+# Table Micromonas clades (Table 3)
+
 ```{r, eval=FALSE}
-table_metadata <- metadata %>% 
-  select(OSD_station_code, Station_name, Ocean, Country) %>% 
-  rename(Station=OSD_station_code, Name=Station_name)
-table_metadata <- xtable::xtable(table_metadata, label="table:OSD_stations", caption='List of OSD stations.')
-print(table_metadata,   
+table_ASV <- read_excel(path=file_main, sheet="Table 3")
+table_ASV <- xtable::xtable(table_ASV, label="table:micromonas", caption='Equivalence between the clade nomenclature for the genus \\textit{Micromonas} in this paper compared to those of Guillou \\textit{et al.} (2004) \\cite{Guillou2004}, Slapeta \\textit{et al.} (2006) \\cite{Slapeta2006}, Worden 2006 \\cite{Worden2006} and Simon \\textit{et al.} (2017) \\cite{Simon2017c}.', align = "lllccccc", digits=0)
+
+print(table_ASV,  scalebox = 0.85, 
+      caption.placement = "top",
+      include.rownames = FALSE, 
+      file=path_table("table_micromonas.tex"),
+      sanitize.text.function = sanitize.italics)
+```
+
+# Table of OSD stations
+
+```{r, eval=FALSE}
+table_metadata <- left_join(samples, metadata) %>% 
+  filter(n_seq_Mamiello_LGC >= 100) %>% 
+  select(OSD_station_code, water_depth, Station_name, Country, Ocean, n_seq_total_LGC, n_seq_Mamiello_LGC) %>%
+  mutate(`Mamiellophyceae %` = n_seq_Mamiello_LGC/n_seq_total_LGC*100) %>% 
+  select(-n_seq_total_LGC) %>% 
+  rename(Station=OSD_station_code, Name=Station_name, `Depth (m)`=water_depth,
+         `Mamiellophyceae reads`= n_seq_Mamiello_LGC)
+
+# The align should include the column for the row number
+table_metadata <- xtable::xtable(table_metadata, label="table:OSD_stations", 
+                                 caption='List of the 92 OSD samples used in this paper. Only samples with more than 100 Mamiellophyceae LGC reads were taken into account.  The percentage of Mamiellophyceae is relative to the total number of LGC reads at each station.',
+                                 digits=c(0,0,0,0,0,0,0,1),
+                                 align="llclllcc")
+
+print(table_metadata,  , size="\\scriptsize",   
       tabular.environment = "longtable", floating=FALSE,
+      format.args = list(big.mark = ",", decimal.mark = "."),
       caption.placement = "top",
       include.rownames = FALSE, 
       file=path_table("table_OSD.tex"))
