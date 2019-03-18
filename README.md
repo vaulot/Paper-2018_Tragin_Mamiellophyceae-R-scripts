@@ -1,5 +1,5 @@
 
-Supplementary data to: Tragin, M. & Vaulot, D. 2018. Novel diversity within Mamiellophyceae unveiled by metabarcoding. submitted to Sci. Rep.
+Supplementary data to: Tragin, M. & Vaulot, D. 2018. Novel diversity within Mamiellophyceae unveiled by metabarcoding. publised in Sci. Rep.
 
 **DOI**: 10.6084/m9.figshare.7233110
 
