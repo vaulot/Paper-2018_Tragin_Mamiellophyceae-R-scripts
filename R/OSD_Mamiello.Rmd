@@ -597,7 +597,7 @@ print(table_ASV,  scalebox = 0.75,
 
 ```{r, eval=FALSE}
 table_ASV <- read_excel(path=file_main, sheet="Table 2")
-table_ASV <- xtable::xtable(table_ASV, label="table:summary", caption='Summary of the coastal distribution of Mamiellophyceae species and clades.  The column indicate the number of samples where the species/clade represented more than 1\\% of Mamiellophyceae reads in the LGC dataset.  For \\textit{Mantoniella} clade A was only oberved in the LW dataset.', align = "lllcccccccc", digits=0)
+table_ASV <- xtable::xtable(table_ASV, label="table:summary", caption='Summary of the coastal distribution of Mamiellophyceae species and clades.  The column "Samples" indicates the number of samples where the species/clade represented more than 1\\% of Mamiellophyceae reads in the LGC dataset.  For \\textit{Mantoniella} clade A was only oberved in the LW dataset. Crosses correspond to the habitat where a given species/clade is present.', align = "lllcccccccc", digits=0)
 
 print(table_ASV,  scalebox = 0.75, 
       caption.placement = "top",
